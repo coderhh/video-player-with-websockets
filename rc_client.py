@@ -67,8 +67,8 @@ class Client():
 
 if __name__ == "__main__":
     root = Tk()
-    root.title('WebSockets Client Demo')
+    root.title('WS RC Client Demo')
     root.wm_attributes("-topmost", 1)
-    root.geometry("600x300+300+600")
+    root.geometry("600x300")
     app = Client(root)
     root.mainloop()

@@ -141,11 +141,11 @@ class App():
             if msg == 'start':
                 self.logger.debug(msg)
                 self.start_camera()
-                return "STARTED"
+                return "CAMERA STARTED"
             elif msg == 'stop':
                 self.logger.debug(msg)
                 self.stop_camera()
-                return "STOP"
+                return "CAMERA STOP"
         return None
 
     async def worker_hanlder(self, websocket, path):
