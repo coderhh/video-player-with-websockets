@@ -1,5 +1,7 @@
+from time import sleep
 import tkinter as tk
 from tkinter import ttk
+from types import TracebackType
 from video import VideoCapture
 from PIL import ImageTk, Image
 import cv2
@@ -16,7 +18,7 @@ class App():
         self.right_frame_width = 650
         self.right_frame_height = 400
         self.video_stream_widget = None
-        self.logger_name = 'Server'
+        self.logger_name = 'server'
         self.init_logger()
         self.left_frame = tk.Frame(self.parent, width=200, heigh=300)
         self.left_frame.grid(row=0, column=0, padx=10, pady=5)
@@ -70,15 +72,17 @@ class App():
         self.logger.debug("Starting camera...")
         if self.video_stream_widget is not None:
             self.video_stream_widget.stop()
-        self.video_stream_widget = VideoCapture(0).start()
+        self.video_stream_widget = VideoCapture("demo.mp4").start()
+        sleep(5)
         self.update()
     def update(self):
-        frame = self.video_stream_widget.frame
-        shape = frame.shape
-        self.imgtk = ImageTk.PhotoImage(image = Image.fromarray(cv2.resize(frame,(shape[1],shape[0]))))
-        self.img_lab.imgtk = self.imgtk
-        self.img_lab.configure(image=self.imgtk)
-        self._job = self.img_lab.after(10, self.update)
+        frame = self.video_stream_widget.read()
+        if frame is not None:
+            shape = frame.shape
+            self.imgtk = ImageTk.PhotoImage(image = Image.fromarray(cv2.resize(frame,(shape[1],shape[0]))))
+            self.img_lab.imgtk = self.imgtk
+            self.img_lab.configure(image=self.imgtk)
+        self._job = self.img_lab.after(1, self.update)   
     def stop_camera(self):
         self.logger.debug("Stoping the camera..")
         self.video_stream_widget.stop()
@@ -89,19 +93,22 @@ class App():
     def start_server(self):
         self.logger.debug("Starting websockets server...")
         self.new_loop = asyncio.new_event_loop()
-        self.t = threading.Thread(target=self.start_loop, args=(self.new_loop,))
+        self.t = threading.Thread(target=self.start_loop, args=(self.new_loop,),name="Server loop")
         self.t.daemon = True
         self.t.start()
-        asyncio.run_coroutine_threadsafe(self.start_ws_server(), self.new_loop)
+        self.f = asyncio.run_coroutine_threadsafe(self.start_ws_server(), self.new_loop)
     def start_loop(self,loop):
         asyncio.set_event_loop(loop)
         loop.run_forever()
 
     async def start_ws_server(self):
-        
-        async with websockets.serve(self.handler, "localhost", 5678):
-            self.logger.debug("Server Started")
-            await asyncio.Future()  # run orefver
+        try:
+            async with websockets.serve(self.handler, "localhost", 5678):
+                self.logger.debug("Server Started!")
+                await asyncio.Future()  # run forever
+        except Exception as e:
+            self.logger.exception(e)
+            
 
     async def handler(self, websocket, path):
         consumer_task = asyncio.create_task(
@@ -109,11 +116,11 @@ class App():
         producer_task = asyncio.create_task(
             self.producer_handler(websocket, path))
         worker_task = asyncio.create_task(
-            self.worker_hanlder(websocket,path))
+            self.worker_hanlder(websocket, path))
 
         done, pending = await asyncio.wait(
             [consumer_task, producer_task, worker_task],
-            return_when=asyncio.ALL_COMPLETED,
+            return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
             task.cancel()
@@ -160,6 +167,7 @@ class App():
 
     def stop_server(self):
         self.logger.debug("Stoping websockets server...")
+        self.f.cancel()
 
 # --- main ---
 if __name__ == "__main__":
